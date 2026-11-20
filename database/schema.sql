@@ -1,6 +1,8 @@
 -- ===================================
 -- Database: webbandienthoaimoi
 -- Mục đích: Website bán điện thoại, laptop, tablet, đồng hồ thông minh
+-- DESTRUCTIVE full-install script: drops existing tables and all their data below.
+-- Never run this on a live database for updates; use additive files under database/migrations/ instead.
 -- ===================================
 
 -- Xóa database nếu tồn tại (Đã tắt để tương thích hosting free)

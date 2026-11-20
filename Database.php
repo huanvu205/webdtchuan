@@ -123,10 +123,7 @@ class Database {
                 $this->dbh->exec("ALTER TABLE users ADD COLUMN avatar VARCHAR(255) DEFAULT NULL;");
             }
 
-            // 6. Cập nhật email admin thành vuhuan123890@gmail.com
-            $this->dbh->exec("UPDATE users SET email = 'vuhuan123890@gmail.com' WHERE (id = 1 OR username = 'admin') AND email != 'vuhuan123890@gmail.com';");
-            
-            // 7. Khởi tạo cấu hình mặc định nếu chưa có
+            // 6. Khởi tạo cấu hình mặc định nếu chưa có; never overwrite saved settings.
             $defaultSettings = [
                 'shop_hotline' => '0336.120.405',
                 'shop_email' => 'vuhuan123890@gmail.com',

@@ -2,6 +2,7 @@
 require_once __DIR__ . '/../Helpers/Helper.php';
 require_once __DIR__ . '/../Models/UserModel.php';
 require_once __DIR__ . '/../Models/CartModel.php';
+require_once __DIR__ . '/../Services/LoginDeviceSecurity.php';
 
 /**
  * AuthController - Xác thực người dùng
@@ -11,10 +12,12 @@ class AuthController extends Controller {
      * @var UserModel
      */
     private $userModel;
+    private $deviceSecurity;
     
     public function __construct() {
         parent::__construct();
         $this->userModel = new UserModel();
+        $this->deviceSecurity = new LoginDeviceSecurity($this->db);
     }
     
     public function login() {
@@ -50,8 +53,9 @@ class AuthController extends Controller {
             }
             
             $user = $this->userModel->findByEmailOrUsername($login);
-            
+
             if (!$user || !$this->userModel->verifyPassword($user, $password)) {
+                $this->deviceSecurity->logEvent($user ?: null, $login, false, 'password_failed');
                 $attempt['count'] = ($attempt['count'] ?? 0) + 1;
                 if ($attempt['count'] >= 5) $attempt['until'] = time() + 900;
                 $_SESSION[$attemptKey] = $attempt;
@@ -61,16 +65,49 @@ class AuthController extends Controller {
             }
             
             if ($user['status'] !== 'active') {
+                $this->deviceSecurity->logEvent($user, $login, false, 'account_inactive');
                 setFlash('error', 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ hỗ trợ.');
                 $this->view('auth.login', ['title' => 'Đăng nhập']);
                 return;
             }
-            
+
+            $accountType = in_array($user['role_name'], ['admin', 'staff'], true) ? 'admin' : 'customer';
+            if (!$this->deviceSecurity->isTrustedCookie($user['id'], $accountType)) {
+                $challenge = $this->deviceSecurity->createOtp($user, $accountType);
+                if (!$challenge) {
+                    $this->deviceSecurity->logEvent($user, $login, false, 'otp_delivery_failed');
+                    setFlash('error', 'Không thể gửi mã xác minh lúc này. Vui lòng thử lại sau.');
+                    $this->view('auth.login', ['title' => 'Đăng nhập - ' . APP_NAME, 'login' => e($login)]);
+                    return;
+                }
+                $_SESSION['pending_device_auth'] = [
+                    'otp_id' => $challenge['id'], 'user_id' => $user['id'], 'account_type' => $accountType,
+                    'user' => $user, 'device_token' => $challenge['token'], 'email' => $challenge['email'],
+                    'attempt_key' => $attemptKey, 'redirect' => $_SESSION['redirect_after_login'] ?? null,
+                    'expires_at' => time() + 300,
+                ];
+                $_SESSION['device_otp_resends'] = 0;
+                $_SESSION['device_otp_resend_at'] = time() + 60;
+                $this->view('auth.verify_device', [
+                    'title' => 'Xác minh thiết bị - ' . APP_NAME,
+                    'email' => $this->maskEmail($challenge['email']),
+                    'resendAfter' => 60,
+                    'otpExpiresAt' => time() + 300,
+                ]);
+                return;
+            }
+
             // Lưu session
             unset($_SESSION[$attemptKey]);
             session_regenerate_id(true);
+            if (!$this->deviceSecurity->recordTrustedLogin($user['id'], $accountType)) {
+                setFlash('error', 'Không thể xác nhận thiết bị đã ghi nhớ. Vui lòng xác minh lại đăng nhập.');
+                $this->view('auth.login', ['title' => 'Đăng nhập - ' . APP_NAME, 'login' => e($login)]);
+                return;
+            }
             $_SESSION['user_id'] = $user['id'];
             $_SESSION['role'] = $user['role_name'];
+            $_SESSION['device_account_type'] = $accountType;
             $_SESSION['user'] = [
                 'id' => $user['id'],
                 'username' => $user['username'],
@@ -96,6 +133,7 @@ class AuthController extends Controller {
             
             // Cập nhật thời gian đăng nhập
             $this->userModel->updateLastLogin($user['id']);
+            $this->deviceSecurity->logEvent($user, $login, true, 'login');
             
             setFlash('success', 'Đăng nhập thành công! Chào mừng ' . $user['full_name']);
             
@@ -111,6 +149,121 @@ class AuthController extends Controller {
         }
         
         $this->view('auth.login', ['title' => 'Đăng nhập - ' . APP_NAME]);
+    }
+
+    public function verifyDevice() {
+        $pending = $_SESSION['pending_device_auth'] ?? null;
+        if (!$pending || empty($pending['otp_id']) || empty($pending['user']['id'])) {
+            $this->redirect(url('auth/login'));
+            return;
+        }
+
+        $secondsLeft = max(0, (int) ($_SESSION['device_otp_resend_at'] ?? time() + 60) - time());
+        if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+            $this->validateCsrf();
+            $action = $this->getInput('otp_action', 'verify');
+            if ($action === 'resend') {
+                if ($secondsLeft <= 0 && ($_SESSION['device_otp_resends'] ?? 0) < 3) {
+                    if ($this->deviceSecurity->resendOtp($pending['otp_id'], $pending['user_id'], $pending['account_type'])) {
+                        $_SESSION['device_otp_resend_at'] = time() + 60;
+                        $pending['expires_at'] = time() + 300;
+                        $_SESSION['pending_device_auth'] = $pending;
+                        $_SESSION['device_otp_resends'] = ($_SESSION['device_otp_resends'] ?? 0) + 1;
+                        setFlash('success', 'Đã gửi mã xác minh mới đến email của bạn.');
+                    } else {
+                        setFlash('error', 'Chưa thể gửi mã mới. Hãy chờ 60 giây hoặc đã hết lượt gửi lại.');
+                    }
+                } else {
+                    setFlash('error', 'Đã hết số lần gửi lại mã.');
+                }
+                $this->redirect(url('auth/verify-device'));
+                return;
+            }
+
+            $code = (string) $this->getInput('otp', '');
+            try {
+                $verified = $this->deviceSecurity->verifyOtp($pending['otp_id'], $pending['user_id'], $pending['account_type'], $code);
+            } catch (Throwable $error) {
+                error_log('Device OTP verification query failed: ' . $error->getMessage());
+                setFlash('error', 'Không thể xác minh mã lúc này. Vui lòng thử lại sau.');
+                $this->view('auth.verify_device', ['title' => 'Xác minh thiết bị - ' . APP_NAME, 'email' => $this->maskEmail($pending['email']), 'resendAfter' => $secondsLeft, 'otpExpiresAt' => $pending['expires_at'] ?? time()]);
+                return;
+            }
+            if (!$verified) {
+                try {
+                    $this->deviceSecurity->logOtpFailure($pending['user_id'], $pending['account_type']);
+                } catch (Throwable $error) {
+                    error_log('Device OTP failure logging failed: ' . $error->getMessage());
+                }
+                setFlash('error', 'Mã xác minh không đúng, đã hết hạn hoặc vượt quá số lần thử.');
+                $this->view('auth.verify_device', ['title' => 'Xác minh thiết bị - ' . APP_NAME, 'email' => $this->maskEmail($pending['email']), 'resendAfter' => $secondsLeft, 'otpExpiresAt' => $pending['expires_at'] ?? time()]);
+                return;
+            }
+
+            try {
+                $user = $pending['user'];
+                session_regenerate_id(true);
+                $this->completeLoginSession($user);
+                if (isset($_SESSION['cart_session_id'])) {
+                    (new CartModel())->mergeGuestCart($user['id'], $_SESSION['cart_session_id']);
+                }
+                $this->updateCartCount();
+                $deviceId = $this->deviceSecurity->trustCurrentDevice($user['id'], $pending['account_type'], hash('sha256', $pending['device_token']));
+                if (!$deviceId) {
+                    throw new RuntimeException('Unable to persist the verified login device.');
+                }
+                $this->setDeviceCookie($pending['device_token']);
+                $this->userModel->updateLastLogin($user['id']);
+                $this->deviceSecurity->logEvent($user, $user['email'], true, 'device_verified_login');
+                $redirect = $pending['redirect'];
+                unset($_SESSION['pending_device_auth'], $_SESSION['device_otp_resend_at'], $_SESSION['device_otp_resends'], $_SESSION['redirect_after_login']);
+                setFlash('success', 'Đăng nhập thành công! Chào mừng ' . $user['full_name']);
+                $this->redirect($redirect ?: (in_array($pending['account_type'], ['admin'], true) ? url('admin/dashboard') : url()));
+            } catch (Throwable $error) {
+                error_log('Device OTP login finalization failed: ' . $error->getMessage());
+                $_SESSION = [];
+                session_regenerate_id(true);
+                setcookie('vh_device', '', ['expires' => time() - 3600, 'path' => '/', 'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'), 'httponly' => true, 'samesite' => 'Lax']);
+                setFlash('error', 'Mã đã được xác minh nhưng chưa thể hoàn tất đăng nhập. Vui lòng thử đăng nhập lại.');
+                $this->redirect(url('auth/login'));
+            }
+            return;
+        }
+
+        $this->view('auth.verify_device', [
+            'title' => 'Xác minh thiết bị - ' . APP_NAME,
+            'email' => $this->maskEmail($pending['email']),
+            'resendAfter' => $secondsLeft,
+            'otpExpiresAt' => $pending['expires_at'] ?? time(),
+        ]);
+    }
+
+    private function completeLoginSession($user) {
+        $_SESSION['user_id'] = $user['id'];
+        $_SESSION['role'] = $user['role_name'];
+        $_SESSION['device_account_type'] = in_array($user['role_name'] ?? '', ['admin', 'staff'], true) ? 'admin' : 'customer';
+        $_SESSION['user'] = [
+            'id' => $user['id'], 'username' => $user['username'], 'full_name' => $user['full_name'],
+            'email' => $user['email'], 'phone' => $user['phone'] ?? '', 'address' => $user['address'] ?? '',
+            'city' => $user['city'] ?? '', 'district' => $user['district'] ?? '', 'ward' => $user['ward'] ?? '',
+            'avatar' => $user['avatar'] ?? null, 'role' => $user['role_name'],
+        ];
+    }
+
+    private function setDeviceCookie($token) {
+        setcookie('vh_device', $token, [
+            'expires' => time() + 31536000, 'path' => '/',
+            'secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https'),
+            'httponly' => true, 'samesite' => 'Lax',
+        ]);
+        $_COOKIE['vh_device'] = $token;
+    }
+
+    private function maskEmail($email) {
+        $parts = explode('@', (string) $email, 2);
+        if (count($parts) !== 2) return 'email đã đăng ký';
+        $name = $parts[0];
+        return (strlen($name) > 2 ? substr($name, 0, 2) : substr($name, 0, 1)) . str_repeat('*', max(3, min(8, strlen($name) - 1))) . '@' . $parts[1];
     }
     
     public function register() {
@@ -183,7 +336,7 @@ class AuthController extends Controller {
         }
 
         // Xóa thông tin tài khoản và giỏ hàng khỏi session
-        unset($_SESSION['user_id'], $_SESSION['role'], $_SESSION['user'], $_SESSION['cart_count']);
+        unset($_SESSION['user_id'], $_SESSION['role'], $_SESSION['user'], $_SESSION['cart_count'], $_SESSION['device_account_type'], $_SESSION['pending_device_auth'], $_SESSION['device_otp_resend_at'], $_SESSION['device_otp_resends']);
 
         // Đổi session ID an toàn
         session_regenerate_id(true);
@@ -443,7 +596,7 @@ class AuthController extends Controller {
             return;
         }
 
-        $this->doLoginUser($user, 'Đăng nhập Google thành công! Chào mừng ' . $user['full_name']);
+        $this->beginSocialDeviceLogin($user, 'Google');
     }
 
     /**
@@ -611,7 +764,7 @@ class AuthController extends Controller {
             return;
         }
 
-        $this->doLoginUser($user, 'Đăng nhập Facebook thành công! Chào mừng ' . $user['full_name']);
+        $this->beginSocialDeviceLogin($user, 'Facebook');
     }
 
     /**
@@ -680,60 +833,41 @@ class AuthController extends Controller {
         return null;
     }
 
-    /**
-     * Thiết lập session đăng nhập cho người dùng
-     * @param array $user
-     * @param string|null $message
-     * @return void
-     */
-    private function doLoginUser($user, $message = null) {
-        if ($user['status'] !== 'active') {
+    private function beginSocialDeviceLogin($user, $provider) {
+        if (($user['status'] ?? '') !== 'active') {
             setFlash('error', 'Tài khoản của bạn đã bị khóa. Vui lòng liên hệ hỗ trợ.');
             $this->redirect(url('auth/login'));
             return;
         }
-
-        // Lưu session
-        session_regenerate_id(true);
-        $_SESSION['user_id'] = $user['id'];
-        $_SESSION['role'] = $user['role_name'] ?? 'customer';
-        $_SESSION['user'] = [
-            'id' => $user['id'],
-            'username' => $user['username'],
-            'full_name' => $user['full_name'],
-            'email' => $user['email'],
-            'phone' => $user['phone'] ?? '',
-            'address' => $user['address'] ?? '',
-            'city' => $user['city'] ?? '',
-            'district' => $user['district'] ?? '',
-            'ward' => $user['ward'] ?? '',
-            'avatar' => $user['avatar'] ?? null,
-            'role' => $user['role_name'] ?? 'customer',
+        $accountType = in_array($user['role_name'] ?? '', ['admin', 'staff'], true) ? 'admin' : 'customer';
+        if ($this->deviceSecurity->isTrustedCookie($user['id'], $accountType)) {
+            session_regenerate_id(true);
+            if (!$this->deviceSecurity->recordTrustedLogin($user['id'], $accountType)) {
+                setFlash('error', 'Không thể xác nhận thiết bị đã ghi nhớ. Vui lòng đăng nhập lại.');
+                $this->redirect(url('auth/login'));
+                return;
+            }
+            $this->completeLoginSession($user);
+            $this->deviceSecurity->logEvent($user, $user['email'], true, strtolower($provider) . '_login');
+            $this->updateCartCount();
+            $this->redirect($accountType === 'admin' ? url('admin/dashboard') : url());
+            return;
+        }
+        $challenge = $this->deviceSecurity->createOtp($user, $accountType);
+        if (!$challenge) {
+            $this->deviceSecurity->logEvent($user, $user['email'], false, 'otp_delivery_failed');
+            setFlash('error', 'Không thể gửi mã xác minh lúc này. Vui lòng đăng nhập lại bằng mật khẩu.');
+            $this->redirect(url('auth/login'));
+            return;
+        }
+        $_SESSION['pending_device_auth'] = [
+            'otp_id' => $challenge['id'], 'user_id' => $user['id'], 'account_type' => $accountType,
+            'user' => $user, 'device_token' => $challenge['token'], 'email' => $challenge['email'], 'redirect' => null,
+            'expires_at' => time() + 300,
         ];
-        
-        // Merge giỏ hàng khách với giỏ của user
-        if (isset($_SESSION['cart_session_id'])) {
-            $cartModel = new CartModel();
-            $cartModel->mergeGuestCart($user['id'], $_SESSION['cart_session_id']);
-        }
-        
-        // Cập nhật số lượng giỏ hàng
-        $this->updateCartCount();
-        
-        // Cập nhật thời gian đăng nhập
-        $this->userModel->updateLastLogin($user['id']);
-        
-        setFlash('success', $message ?? ('Đăng nhập thành công! Chào mừng ' . $user['full_name']));
-        
-        // Redirect theo role
-        $redirect = $_SESSION['redirect_after_login'] ?? null;
-        unset($_SESSION['redirect_after_login']);
-        
-        if (($user['role_name'] ?? '') === 'admin' || ($user['role_name'] ?? '') === 'staff') {
-            $this->redirect($redirect ?? url('admin/dashboard'));
-        } else {
-            $this->redirect($redirect ?? url());
-        }
+        $_SESSION['device_otp_resends'] = 0;
+        $_SESSION['device_otp_resend_at'] = time() + 60;
+        $this->redirect(url('auth/verify-device'));
     }
     
     private function updateCartCount() {

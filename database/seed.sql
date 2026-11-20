@@ -1,5 +1,7 @@
 -- =========================================================================
 -- DỮ LIỆU MẪU (SEED DATA) CHO WEBSITE THƯƠNG MẠI ĐIỆN TỬ WEBBANDIENTHOAIMOI
+-- DESTRUCTIVE: this script deletes existing product/catalog data before inserting demo rows.
+-- Do not run it against the live shop database.
 -- =========================================================================
 
 -- USE webbandienthoaimoi;

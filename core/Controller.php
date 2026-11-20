@@ -54,6 +54,24 @@ class Controller {
             header('Location: ' . APP_URL . '/auth/login');
             exit;
         }
+
+        if (!empty($_SESSION['device_account_type'])) {
+            require_once __DIR__ . '/../app/Services/LoginDeviceSecurity.php';
+            $security = new LoginDeviceSecurity($this->db);
+            if (!$security->isSessionActive($this->getUserId(), $_SESSION['device_account_type'], session_id())) {
+                $_SESSION = [];
+                if (ini_get('session.use_cookies')) {
+                    $params = session_get_cookie_params();
+                    setcookie(session_name(), '', time() - 42000, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+                }
+                session_destroy();
+                header('Location: ' . APP_URL . '/auth/login');
+                exit;
+            }
+        } else {
+            header('Location: ' . APP_URL . '/auth/logout');
+            exit;
+        }
     }
     
     /**

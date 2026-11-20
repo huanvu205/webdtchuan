@@ -63,6 +63,7 @@ require_once __DIR__ . '/app/Services/VnpayService.php';
 // Load Controllers
 require_once __DIR__ . '/app/Controllers/HomeController.php';
 require_once __DIR__ . '/app/Controllers/AuthController.php';
+require_once __DIR__ . '/app/Controllers/DeviceController.php';
 require_once __DIR__ . '/app/Controllers/ProductController.php';
 require_once __DIR__ . '/app/Controllers/CompareController.php';
 require_once __DIR__ . '/app/Controllers/CartController.php';
@@ -161,6 +162,7 @@ $routes = [
     
     // Auth
     'auth' => 'AuthController',
+    'user' => 'UserController',
     
     // Products
     'products' => 'ProductController',
@@ -268,6 +270,11 @@ function dispatchAdmin($segments) {
             $ctrl = new SettingController();
             dispatchAction($ctrl, $action, $param);
             break;
+        case 'devices':
+            $ctrl = new DeviceController();
+            $ctrl->requireStaff();
+            dispatchAction($ctrl, $action, $param);
+            break;
         default:
             http_response_code(404);
             echo "404 Not Found";
@@ -309,6 +316,9 @@ try {
     } elseif ($controller === 'auth') {
         $ctrl = new AuthController();
         dispatchAction($ctrl, $action, $param);
+    } elseif ($controller === 'user' && $action === 'devices') {
+        $ctrl = new DeviceController();
+        dispatchAction($ctrl, $param ?? 'index', $param2);
     } elseif ($controller === 'products') {
         $ctrl = new ProductController();
         if ($action === 'index' || $action === '') {
