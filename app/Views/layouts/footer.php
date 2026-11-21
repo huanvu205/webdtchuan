@@ -423,19 +423,128 @@ if ($centerPopup && !empty($centerPopup['image'])):
 <?php endif; ?>
 
 <style>
-#analytics-consent{position:fixed;z-index:3000;right:18px;bottom:18px;left:auto;width:min(520px,calc(100vw - 110px));background:#fff;padding:20px;border:1px solid #E2E8F0;border-radius:16px;box-shadow:0 12px 40px rgba(15,23,42,.18);color:#0F172A}
-#analytics-consent p{color:#475569;line-height:1.5}
-@media(max-width:600px){#analytics-consent{right:12px;bottom:96px;left:12px;width:auto;padding:16px}}
+#analytics-consent{position:fixed;z-index:3000;inset:50% auto auto 50%;transform:translate(-50%,-50%);display:none;width:min(900px,calc(100vw - 40px));max-height:min(760px,calc(100dvh - 40px));overflow:auto;padding:0;border:1px solid #eceef2;border-radius:22px;background:#fff;color:#20242c;box-shadow:0 24px 80px rgba(23,32,48,.24);font-family:Inter,Arial,sans-serif}
+#analytics-consent .cc-layout{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(250px,.8fr);min-height:530px}
+#analytics-consent .cc-content{padding:34px 36px 30px}
+#analytics-consent .cc-brand{display:flex;align-items:center;gap:9px;margin-bottom:25px;color:#cf202e;font-size:14px;font-weight:800;letter-spacing:.02em}
+#analytics-consent .cc-brand-mark{display:grid;width:34px;height:34px;place-items:center;border-radius:11px;background:#fff0f1;font-size:17px}
+#analytics-consent .cc-title{margin:0 0 9px;color:#20242c;font-size:25px;font-weight:800;letter-spacing:-.035em;line-height:1.2}
+#analytics-consent .cc-intro{margin:0 0 21px;color:#667085;font-size:13px;line-height:1.65}
+#analytics-consent .cc-groups{display:grid;gap:9px;margin:0 0 17px}
+#analytics-consent .cc-group{display:flex;align-items:center;gap:12px;min-height:57px;padding:10px 12px;border:1px solid #eceef2;border-radius:12px;background:#fff}
+#analytics-consent .cc-icon{display:grid;width:35px;height:35px;flex:0 0 35px;place-items:center;border-radius:10px;background:#fff3f3;color:#c92332;font-size:14px}
+#analytics-consent .cc-group-copy{min-width:0;flex:1}
+#analytics-consent .cc-group-title{display:block;color:#292d35;font-size:12.5px;font-weight:750;line-height:1.35}
+#analytics-consent .cc-group-desc{display:block;margin-top:2px;color:#7b8492;font-size:10.5px;line-height:1.4}
+#analytics-consent .cc-switch{position:relative;width:35px;height:20px;flex:0 0 35px;padding:0;border:0;border-radius:20px;background:#d8dde5;cursor:pointer;transition:background .18s}
+#analytics-consent .cc-switch:after{position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 1px 3px #0002;content:""}
+#analytics-consent .cc-switch.is-on{background:#cf202e}
+#analytics-consent .cc-switch.is-on:after{left:18px}
+#analytics-consent .cc-switch:focus-visible{outline:3px solid rgba(201,35,50,.25);outline-offset:3px}
+#analytics-consent .cc-always{flex:0 0 auto;color:#16834a;font-size:9px;font-weight:800;letter-spacing:.04em;text-transform:uppercase}
+#analytics-consent .cc-customize{position:relative;margin:0}
+#analytics-consent .cc-customize summary{display:grid;min-height:43px;place-items:center;padding:6px;border:1px solid #d9dde5;border-radius:10px;background:#fff;color:#424956;font-size:10.5px;font-weight:750;text-align:center;cursor:pointer;list-style:none}
+#analytics-consent .cc-customize summary::-webkit-details-marker{display:none}
+#analytics-consent .cc-customize summary:hover,#analytics-consent .cc-customize[open] summary{border-color:#c92332;color:#bd1e2d}
+#analytics-consent .cc-customize-note{position:absolute;right:0;bottom:calc(100% + 8px);z-index:2;width:min(290px,70vw);margin:0;padding:12px;border:1px solid #eceef2;border-radius:10px;background:#fff;color:#687386;font-size:11px;line-height:1.55;box-shadow:0 8px 24px #17203318}
+#analytics-consent .cc-actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+#analytics-consent .cc-actions button{min-height:43px;border:1px solid #d9dde5;border-radius:10px;background:#fff;color:#424956;font:700 11.5px Inter,Arial,sans-serif;cursor:pointer;transition:background .18s,border-color .18s,transform .18s}
+#analytics-consent .cc-actions button:hover{transform:translateY(-1px);border-color:#c92332}
+#analytics-consent .cc-actions [data-consent-action="accept"]{border-color:#c92332;background:#c92332;color:#fff}
+#analytics-consent .cc-actions [data-consent-action="accept"]:hover{background:#ad1724}
+#analytics-consent .cc-illustration{position:relative;display:grid;overflow:hidden;place-items:center;padding:28px;background:linear-gradient(145deg,#fff8f8,#fff0f1 64%,#ffe5e7)}
+#analytics-consent .cc-illustration:before,#analytics-consent .cc-illustration:after{position:absolute;border:1px solid rgba(201,35,50,.09);border-radius:50%;content:""}
+#analytics-consent .cc-illustration:before{width:320px;height:320px}
+#analytics-consent .cc-illustration:after{width:245px;height:245px}
+#analytics-consent .cc-art{position:relative;z-index:1;width:min(100%,300px);height:auto}
+#analytics-consent .cc-art-caption{position:absolute;right:25px;bottom:24px;left:25px;color:#8e5960;font-size:11px;font-weight:650;line-height:1.5;text-align:center}
+@media(max-width:700px){#analytics-consent{width:calc(100vw - 24px);max-height:calc(100dvh - 28px);border-radius:18px}#analytics-consent .cc-layout{display:block;min-height:0}#analytics-consent .cc-content{padding:22px 18px 18px}#analytics-consent .cc-brand{margin-bottom:15px}#analytics-consent .cc-title{font-size:21px}#analytics-consent .cc-intro{margin-bottom:14px;font-size:12px}#analytics-consent .cc-groups{gap:7px;margin-bottom:12px}#analytics-consent .cc-group{min-height:52px;padding:8px 9px;gap:9px}#analytics-consent .cc-icon{width:31px;height:31px;flex-basis:31px}#analytics-consent .cc-group-desc{font-size:10px}#analytics-consent .cc-actions{gap:7px}#analytics-consent .cc-actions button{min-height:41px;font-size:10px}#analytics-consent .cc-customize summary{min-height:41px;font-size:9.5px}#analytics-consent .cc-illustration{display:none}}
+@media(max-width:380px){#analytics-consent .cc-content{padding:18px 14px 15px}#analytics-consent .cc-title{font-size:19px}#analytics-consent .cc-group-desc{font-size:9px}#analytics-consent .cc-actions{gap:5px}#analytics-consent .cc-actions button{font-size:9px}#analytics-consent .cc-customize summary{font-size:9px}}
 </style>
 <aside id="analytics-consent" style="display:none">
-    <strong>Quyền riêng tư</strong><p class="mb-2">Cho phép dùng cookie phân tích ẩn danh để cải thiện website? Bạn có thể từ chối và vẫn mua sắm bình thường.</p>
-    <button type="button" class="btn btn-sm btn-outline-secondary" data-analytics-consent="rejected">Từ chối</button>
-    <button type="button" class="btn btn-sm btn-danger" data-analytics-consent="accepted">Đồng ý phân tích</button>
+    <div class="cc-layout">
+        <div class="cc-content">
+            <div class="cc-brand"><span class="cc-brand-mark"><i class="fa-solid fa-shield-halved"></i></span> VŨ HUÂN SHOP <span style="color:#9aa1ad;font-weight:500">· Quyền riêng tư</span></div>
+            <h2 class="cc-title">Bạn làm chủ cookie của mình</h2>
+            <p class="cc-intro">Cookie giúp website hoạt động ổn định và mang đến trải nghiệm mua sắm phù hợp hơn. Bạn có thể chọn cách sử dụng cookie bên dưới.</p>
+            <div class="cc-groups">
+                <div class="cc-group"><span class="cc-icon"><i class="fa-solid fa-lock"></i></span><span class="cc-group-copy"><span class="cc-group-title">Cookie thiết yếu</span><span class="cc-group-desc">Cần thiết cho giỏ hàng, đăng nhập và thanh toán.</span></span><span class="cc-always">Luôn bật</span></div>
+                <div class="cc-group"><span class="cc-icon"><i class="fa-solid fa-sliders"></i></span><span class="cc-group-copy"><span class="cc-group-title">Cookie chức năng</span><span class="cc-group-desc">Ghi nhớ tùy chọn để sử dụng website thuận tiện hơn.</span></span><button type="button" class="cc-switch" data-cookie-toggle="functional" role="switch" aria-checked="false" aria-label="Cookie chức năng" title="Bật hoặc tắt cookie chức năng"></button></div>
+                <div class="cc-group"><span class="cc-icon"><i class="fa-solid fa-chart-line"></i></span><span class="cc-group-copy"><span class="cc-group-title">Cookie phân tích</span><span class="cc-group-desc">Thống kê ẩn danh để cải thiện trải nghiệm mua sắm.</span></span><button type="button" class="cc-switch" data-cookie-toggle="analytics" role="switch" aria-checked="false" aria-label="Cookie phân tích" title="Bật hoặc tắt cookie phân tích"></button></div>
+                <div class="cc-group"><span class="cc-icon"><i class="fa-solid fa-bullseye"></i></span><span class="cc-group-copy"><span class="cc-group-title">Cookie quảng cáo</span><span class="cc-group-desc">Hỗ trợ nội dung và ưu đãi phù hợp hơn với bạn.</span></span><button type="button" class="cc-switch" data-cookie-toggle="marketing" role="switch" aria-checked="false" aria-label="Cookie quảng cáo" title="Bật hoặc tắt cookie quảng cáo"></button></div>
+            </div>
+            <div class="cc-actions">
+                <button type="button" data-consent-action="reject">Từ chối tất cả</button>
+                <button type="button" data-consent-action="customize">Tùy chỉnh lựa chọn</button>
+                <button type="button" data-consent-action="accept">Đồng ý tất cả</button>
+            </div>
+        </div>
+        <div class="cc-illustration" aria-hidden="true">
+            <svg class="cc-art" viewBox="0 0 320 300" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M160 24 265 64v76c0 67-44 111-105 136C99 251 55 207 55 140V64L160 24Z" fill="#fff" stroke="#C92332" stroke-width="7" stroke-linejoin="round"/>
+                <path d="M160 47 242 78v62c0 52-32 88-82 111-50-23-82-59-82-111V78l82-31Z" fill="#FFF1F2"/>
+                <rect x="112" y="119" width="96" height="73" rx="15" fill="#C92332"/>
+                <path d="M132 119v-15a28 28 0 0 1 56 0v15" stroke="#C92332" stroke-width="10" stroke-linecap="round"/>
+                <circle cx="160" cy="151" r="8" fill="white"/><path d="M160 158v13" stroke="white" stroke-width="7" stroke-linecap="round"/>
+                <circle cx="76" cy="77" r="18" fill="#fff" stroke="#F0B8BE" stroke-width="3"/><path d="m68 77 6 6 11-13" stroke="#C92332" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle cx="244" cy="207" r="14" fill="#fff" stroke="#F0B8BE" stroke-width="3"/><path d="m238 207 4 4 8-9" stroke="#C92332" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M84 225h40M198 77h28" stroke="#E8A0A8" stroke-width="5" stroke-linecap="round"/><circle cx="91" cy="184" r="4" fill="#C92332"/><circle cx="226" cy="236" r="5" fill="#C92332"/>
+            </svg>
+            <div class="cc-art-caption">Thông tin của bạn được tôn trọng và bảo vệ trong mỗi trải nghiệm mua sắm.</div>
+        </div>
+    </div>
 </aside>
 <script>
-(()=>{const key='analytics_consent';if(!document.cookie.split('; ').some(v=>v.startsWith(key+'='))){const panel=document.getElementById('analytics-consent');if(panel)panel.style.display='block'}document.querySelectorAll('[data-analytics-consent]').forEach(b=>b.addEventListener('click',()=>{const secure=location.protocol==='https:'?'; Secure':'';document.cookie=key+'='+b.dataset.analyticsConsent+'; Max-Age=15552000; Path=/; SameSite=Lax'+secure;document.getElementById('analytics-consent').remove();location.reload()}));document.addEventListener('click',e=>{if(typeof gtag!=='function')return;if(e.target.closest('.btn-add-cart,[data-action="add-to-cart"]'))gtag('event','add_to_cart');if(e.target.closest('#submit-order'))gtag('event','begin_checkout')})})();
+(()=>{
+    const key='vuhuan_cookie_consent_v1';
+    const categories=['functional','analytics','marketing'];
+    const defaults={essential:true,functional:false,analytics:false,marketing:false};
+    const panel=document.getElementById('analytics-consent');
+    if(!panel)return;
+    const readConsent=()=>{
+        try{
+            const saved=JSON.parse(sessionStorage.getItem(key)||'null');
+            if(saved&&saved.version===1)return{essential:true,functional:saved.functional===true,analytics:saved.analytics===true,marketing:saved.marketing===true};
+        }catch(e){}
+        return null;
+    };
+    let consent=readConsent()||{...defaults};
+    window.vhCookieConsent=consent;
+    const updateSwitches=()=>document.querySelectorAll('#analytics-consent [data-cookie-toggle]').forEach(toggle=>{
+        const active=consent[toggle.dataset.cookieToggle]===true;
+        toggle.classList.toggle('is-on',active);
+        toggle.setAttribute('aria-checked',active?'true':'false');
+    });
+    const saveConsent=next=>{
+        consent={essential:true,functional:next.functional===true,analytics:next.analytics===true,marketing:next.marketing===true};
+        window.vhCookieConsent=consent;
+        let saved=false;
+        try{sessionStorage.setItem(key,JSON.stringify({version:1,functional:consent.functional,analytics:consent.analytics,marketing:consent.marketing}));saved=true}catch(e){}
+        panel.remove();
+        if(saved)location.reload();
+    };
+    if(readConsent())panel.style.display='none';else panel.style.display='block';
+    updateSwitches();
+    panel.querySelectorAll('[data-cookie-toggle]').forEach(toggle=>toggle.addEventListener('click',()=>{
+        const category=toggle.dataset.cookieToggle;
+        if(!categories.includes(category))return;
+        consent[category]=!consent[category];
+        updateSwitches();
+    }));
+    panel.querySelectorAll('[data-consent-action]').forEach(button=>button.addEventListener('click',()=>{
+        const action=button.dataset.consentAction;
+        if(action==='reject')saveConsent(defaults);
+        else if(action==='accept')saveConsent({essential:true,functional:true,analytics:true,marketing:true});
+        else if(action==='customize')saveConsent(consent);
+    }));
+    document.addEventListener('click',event=>{
+        if(!window.vhCookieConsent||window.vhCookieConsent.analytics!==true||typeof gtag!=='function')return;
+        if(event.target.closest('.btn-add-cart,[data-action="add-to-cart"]'))gtag('event','add_to_cart');
+        if(event.target.closest('#submit-order'))gtag('event','begin_checkout');
+    });
+})();
 </script>
-<?php if (isset($emailSent) && empty($isPaymentFailed) && !empty($order['order_number']) && !empty($order['final_amount']) && ($_SESSION['ga_purchase_sent_order'] ?? null) !== $order['order_number']): $_SESSION['ga_purchase_sent_order'] = $order['order_number']; ?><script>if(typeof gtag==='function')gtag('event','purchase',{transaction_id:<?= json_encode((string)$order['order_number']) ?>,value:<?= (float)$order['final_amount'] ?>,currency:'VND'});</script><?php endif; ?>
+<?php if (isset($emailSent) && empty($isPaymentFailed) && !empty($order['order_number']) && !empty($order['final_amount']) && ($_SESSION['ga_purchase_sent_order'] ?? null) !== $order['order_number']): $_SESSION['ga_purchase_sent_order'] = $order['order_number']; ?><script>if(typeof gtag==='function'&&window.vhCookieConsent&&window.vhCookieConsent.analytics===true)gtag('event','purchase',{transaction_id:<?= json_encode((string)$order['order_number']) ?>,value:<?= (float)$order['final_amount'] ?>,currency:'VND'});</script><?php endif; ?>
 <!-- Bootstrap 5 JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 <!-- Main JS -->
